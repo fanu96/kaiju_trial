@@ -17,8 +17,9 @@
 #include <linux/susfs_def.h>
 #endif
 
+// Use the internal headers consistent with the working file's API usage
+#include "fsnotify.h"
 #include "inotify/inotify.h"
-#include "../fs/mount.h"
 
 #if defined(CONFIG_PROC_FS)
 
@@ -95,11 +96,13 @@ static void inotify_fdinfo(struct seq_file *m, struct fsnotify_mark *mark)
 	struct inotify_inode_mark *inode_mark;
 	struct inode *inode;
 
-	if (!(mark->connector->flags & FSNOTIFY_OBJ_TYPE_INODE))
+	// API CHANGE: Use 'type' instead of 'flags'
+	if (mark->connector->type != FSNOTIFY_OBJ_TYPE_INODE)
 		return;
 
 	inode_mark = container_of(mark, struct inotify_inode_mark, fsn_mark);
-	inode = igrab(mark->connector->inode);
+	// API CHANGE: Use helper function to get inode
+	inode = igrab(fsnotify_conn_inode(mark->connector));
 	if (inode) {
 #ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
 		if (likely(current->susfs_task_state & TASK_STRUCT_NON_ROOT_USER_APP_PROC) &&
@@ -117,9 +120,10 @@ static void inotify_fdinfo(struct seq_file *m, struct fsnotify_mark *mark)
 			if (kern_path(dpath, 0, &path)) {
 				goto out_free_pathname;
 			}
+			// FIX: Print actual ignored_mask
 			seq_printf(m, "inotify wd:%x ino:%lx sdev:%x mask:%x ignored_mask:%x ",
-			   inode_mark->wd, path.dentry->d_inode->i_ino, path.dentry->d_inode->i_sb->s_dev,
-			   inotify_mark_user_mask(mark));
+					inode_mark->wd, path.dentry->d_inode->i_ino, path.dentry->d_inode->i_sb->s_dev,
+					inotify_mark_user_mask(mark), mark->ignored_mask);
 			show_mark_fhandle(m, path.dentry->d_inode);
 			seq_putc(m, '\n');
 			iput(inode);
@@ -131,10 +135,10 @@ out_free_pathname:
 		}
 out_seq_printf:
 #endif
-		u32 mask = mark->mask & IN_ALL_EVENTS;
+		// FIX: Use inotify_mark_user_mask and print actual ignored_mask
 		seq_printf(m, "inotify wd:%x ino:%lx sdev:%x mask:%x ignored_mask:%x ",
 			   inode_mark->wd, inode->i_ino, inode->i_sb->s_dev,
-			   mask, mark->ignored_mask);
+			   inotify_mark_user_mask(mark), mark->ignored_mask);
 		show_mark_fhandle(m, inode);
 		seq_putc(m, '\n');
 		iput(inode);
@@ -150,7 +154,12 @@ void inotify_show_fdinfo(struct seq_file *m, struct file *f)
 
 #ifdef CONFIG_FANOTIFY
 
+// FIX: Add conditional signature to match show_fdinfo's expectation
+#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
+static void fanotify_fdinfo(struct seq_file *m, struct fsnotify_mark *mark, struct file *file)
+#else
 static void fanotify_fdinfo(struct seq_file *m, struct fsnotify_mark *mark)
+#endif
 {
 	unsigned int mflags = 0;
 	struct inode *inode;
@@ -158,8 +167,10 @@ static void fanotify_fdinfo(struct seq_file *m, struct fsnotify_mark *mark)
 	if (mark->flags & FSNOTIFY_MARK_FLAG_IGNORED_SURV_MODIFY)
 		mflags |= FAN_MARK_IGNORED_SURV_MODIFY;
 
-	if (mark->connector->flags & FSNOTIFY_OBJ_TYPE_INODE) {
-		inode = igrab(mark->connector->inode);
+	// API CHANGE: Use 'type' instead of 'flags'
+	if (mark->connector->type == FSNOTIFY_OBJ_TYPE_INODE) {
+		// API CHANGE: Use helper function to get inode
+		inode = igrab(fsnotify_conn_inode(mark->connector));
 		if (!inode)
 			return;
 		seq_printf(m, "fanotify ino:%lx sdev:%x mflags:%x mask:%x ignored_mask:%x ",
@@ -168,8 +179,9 @@ static void fanotify_fdinfo(struct seq_file *m, struct fsnotify_mark *mark)
 		show_mark_fhandle(m, inode);
 		seq_putc(m, '\n');
 		iput(inode);
-	} else if (mark->connector->flags & FSNOTIFY_OBJ_TYPE_VFSMOUNT) {
-		struct mount *mnt = real_mount(mark->connector->mnt);
+	// API CHANGE: Use helper function to get mount
+	} else if (mark->connector->type == FSNOTIFY_OBJ_TYPE_VFSMOUNT) {
+		struct mount *mnt = fsnotify_conn_mount(mark->connector);
 
 		seq_printf(m, "fanotify mnt_id:%x mflags:%x mask:%x ignored_mask:%x\n",
 			   mnt->mnt_id, mflags, mark->mask, mark->ignored_mask);
@@ -179,28 +191,10 @@ static void fanotify_fdinfo(struct seq_file *m, struct fsnotify_mark *mark)
 void fanotify_show_fdinfo(struct seq_file *m, struct file *f)
 {
 	struct fsnotify_group *group = f->private_data;
-	unsigned int flags = 0;
 
-	switch (group->priority) {
-	case FS_PRIO_0:
-		flags |= FAN_CLASS_NOTIF;
-		break;
-	case FS_PRIO_1:
-		flags |= FAN_CLASS_CONTENT;
-		break;
-	case FS_PRIO_2:
-		flags |= FAN_CLASS_PRE_CONTENT;
-		break;
-	}
-
-	if (group->max_events == UINT_MAX)
-		flags |= FAN_UNLIMITED_QUEUE;
-
-	if (group->fanotify_data.max_marks == UINT_MAX)
-		flags |= FAN_UNLIMITED_MARKS;
-
+	// API CHANGE: flags are now directly in fanotify_data, no need to build them
 	seq_printf(m, "fanotify flags:%x event-flags:%x\n",
-		   flags, group->fanotify_data.f_flags);
+		   group->fanotify_data.flags, group->fanotify_data.f_flags);
 
 	show_fdinfo(m, f, fanotify_fdinfo);
 }
