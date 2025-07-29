@@ -323,7 +323,7 @@ bool ksu_is_manager_apk(char *path)
 #else
  	return check_v2_signature(path, EXPECTED_NEXT_SIZE, EXPECTED_NEXT_HASH);
 #endif
-{
+	
 	int tries = 0;
 
 	while (tries++ < 10) {
