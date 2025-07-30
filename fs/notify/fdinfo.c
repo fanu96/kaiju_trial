@@ -94,8 +94,6 @@ static void inotify_fdinfo(struct seq_file *m, struct fsnotify_mark *mark)
 {
 	struct inotify_inode_mark *inode_mark;
 	struct inode *inode;
-	// FIX: Declare all variables at the top of the function block.
-	u32 mask;
 
 	if (!(mark->connector->flags & FSNOTIFY_OBJ_TYPE_INODE))
 		return;
@@ -119,11 +117,9 @@ static void inotify_fdinfo(struct seq_file *m, struct fsnotify_mark *mark)
 			if (kern_path(dpath, 0, &path)) {
 				goto out_free_pathname;
 			}
-			// FIX: Assign value to 'mask' here.
-			mask = mark->mask & IN_ALL_EVENTS;
-			seq_printf(m, "inotify wd:%x ino:%lx sdev:%x mask:%x ignored_mask:%x ",
+			seq_printf(m, "inotify wd:%x ino:%lx sdev:%x mask:%x ignored_mask:0 ",
 			   inode_mark->wd, path.dentry->d_inode->i_ino, path.dentry->d_inode->i_sb->s_dev,
-			   mask, mark->ignored_mask);
+			   inotify_mark_user_mask(mark));
 			show_mark_fhandle(m, path.dentry->d_inode);
 			seq_putc(m, '\n');
 			iput(inode);
@@ -135,11 +131,9 @@ out_free_pathname:
 		}
 out_seq_printf:
 #endif
-		// FIX: Assign value to 'mask' here.
-		mask = mark->mask & IN_ALL_EVENTS;
-		seq_printf(m, "inotify wd:%x ino:%lx sdev:%x mask:%x ignored_mask:%x ",
+		seq_printf(m, "inotify wd:%x ino:%lx sdev:%x mask:%x ignored_mask:0 ",
 			   inode_mark->wd, inode->i_ino, inode->i_sb->s_dev,
-			   mask, mark->ignored_mask);
+			   inotify_mark_user_mask(mark));
 		show_mark_fhandle(m, inode);
 		seq_putc(m, '\n');
 		iput(inode);
@@ -155,11 +149,7 @@ void inotify_show_fdinfo(struct seq_file *m, struct file *f)
 
 #ifdef CONFIG_FANOTIFY
 
-#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
-static void fanotify_fdinfo(struct seq_file *m, struct fsnotify_mark *mark, struct file *file)
-#else
 static void fanotify_fdinfo(struct seq_file *m, struct fsnotify_mark *mark)
-#endif
 {
 	unsigned int mflags = 0;
 	struct inode *inode;
