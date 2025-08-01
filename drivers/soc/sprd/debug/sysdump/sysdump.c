@@ -1343,6 +1343,7 @@ void get_file_line_info(struct pt_regs *regs)
 		pr_debug("no file info ,do nothing\n");
 	}
 }
+#ifdef CONFIG_STACKTRACE
 void get_exception_stack_info(struct pt_regs *regs)
 {
 	unsigned long stack_entries[MAX_STACK_TRACE_DEPTH];
@@ -1407,6 +1408,14 @@ void get_exception_stack_info(struct pt_regs *regs)
 			(void *)(unsigned long)stack_entries[0]);
 	}
 }
+#else
+
+void get_exception_stack_info(struct pt_regs *regs)
+{
+	/* Stub version: do nothing if stack trace is disabled */
+}
+
+#endif
 static int prepare_exception_info(struct pt_regs *regs,
 				struct task_struct *tsk, const char *reason)
 {
