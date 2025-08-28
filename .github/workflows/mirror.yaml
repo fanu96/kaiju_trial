@@ -1,29 +1,26 @@
-name: Debug Secret Checker
+# .github/workflows/mirror.yml
 
+name: Mirror to kaiju_trial
+
+# This allows you to run this workflow manually from the Actions tab
 on:
   workflow_dispatch:
 
 jobs:
-  check-secret:
+  mirror:
     runs-on: ubuntu-latest
     steps:
-      - name: Check if the secret exists
-        run: |
-          if [ -n "${{ secrets.BACKUP_PAT }}" ]; then
-            echo "✅ Success: The BACKUP_PAT secret was loaded by the runner."
-          else
-            echo "❌ Failure: The BACKUP_PAT secret is EMPTY or NOT FOUND."
-            exit 1
-          fi
+      # Step 1: Check out the source repository (this one) completely
+      - name: Checkout source repository
+        uses: actions/checkout@v4
+        with:
+          # This fetches all history for all branches and tags, which is crucial for a mirror
+          fetch-depth: 0
 
-      - name: Check the first few characters of the token (SAFE)
+      # Step 2: Push everything to the new repository
+      - name: Push to new repository (kaiju_trial)
         run: |
-          # This is a safe way to confirm the token format without exposing it.
-          # A classic PAT starts with ghp_
-          TOKEN_VALUE="${{ secrets.BACKUP_PAT }}"
-          if [[ $TOKEN_VALUE == ghp_* ]]; then
-            echo "✅ Success: The secret appears to be a classic PAT (starts with ghp_)."
-          else
-            echo "❌ Failure: The secret does NOT look like a classic PAT."
-            exit 1
-          fi
+          echo "Mirroring to https://github.com/fanu96/kaiju_trial.git"
+          # Use the --mirror flag to copy all branches, tags, and history
+          # The secret provides the authentication needed to push to the private repo
+          git push --mirror "https://${{ secrets.BACKUP_PAT }}@github.com/fanu96/kaiju_trial.git"
