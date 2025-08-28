@@ -1,8 +1,8 @@
-# .github/workflows/mirror.yml
+# .github/workflows/mirror-to-public.yml
 
-name: Mirror to kaiju_trial
+name: Mirror to Public Repo (kaiju_trial)
 
-# This allows you to run this workflow manually from the Actions tab
+# Allows you to run this workflow manually from the Actions tab
 on:
   workflow_dispatch:
 
@@ -10,17 +10,26 @@ jobs:
   mirror:
     runs-on: ubuntu-latest
     steps:
-      # Step 1: Check out the source repository (this one) completely
+      # Step 1: Checkout the source private repository completely
       - name: Checkout source repository
         uses: actions/checkout@v4
         with:
-          # This fetches all history for all branches and tags, which is crucial for a mirror
-          fetch-depth: 0
+          fetch-depth: 0 # Fetches all history for all branches and tags
 
-      # Step 2: Push everything to the new repository
-      - name: Push to new repository (kaiju_trial)
+      # Step 2: Set up and push to the destination repository
+      - name: Push to public repository (kaiju_trial)
+        env:
+          # Load the Personal Access Token from the repository secrets
+          PAT: ${{ secrets.BACKUP_PAT }}
+          # Define the target repository
+          TARGET_REPO: fanu96/kaiju_trial
         run: |
-          echo "Mirroring to https://github.com/fanu96/kaiju_trial.git"
-          # Use the --mirror flag to copy all branches, tags, and history
-          # The secret provides the authentication needed to push to the private repo
-          git push --mirror "https://${{ secrets.BACKUP_PAT }}@github.com/fanu96/kaiju_trial.git"
+          echo "Setting up remote destination..."
+          # Add a new remote named 'destination' using the PAT for authentication.
+          # This is a more robust method than a single push command.
+          # The username 'fanu96' is added to be explicit.
+          git remote add destination "https://fanu96:${PAT}@github.com/${TARGET_REPO}.git"
+          
+          echo "Pushing to destination..."
+          # Push everything (all branches, all tags) to the new 'destination' remote.
+          git push destination --mirror
