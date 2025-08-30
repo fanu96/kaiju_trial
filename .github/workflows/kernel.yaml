@@ -20,17 +20,13 @@ jobs:
       KBUILD_BUILD_USER: '@fanuverse'
       KBUILD_BUILD_HOST: ''
       
-      # Ccache Flags
-      USE_CCACHE: 1
-      CCACHE_EXEC: /usr/bin/ccache
-
       # Toolchain Paths
-      CLANG_BASE: ${{ github.workspace }}/toolchains/clang-r383902b
+      CLANG_BASE: ${{ github.workspace }}/toolchains/clang-r383902b1
       GCC_64_BASE: ${{ github.workspace }}/toolchains/gcc-14.3
       GCC_32_BASE: ${{ github.workspace }}/toolchains/gcc-14.3
 
       # Main Compiler and Cross-Compile Variables
-      CC: "ccache clang"
+      CC: "clang"
       CROSS_COMPILE: "${{ github.workspace }}/toolchains/gcc-14.3/bin/aarch64-none-linux-gnu-"
       CROSS_COMPILE_ARM32: "${{ github.workspace }}/toolchains/gcc-14.3/bin/arm-none-linux-gnueabihf-"
       
@@ -65,21 +61,6 @@ jobs:
         run: |
           mkdir -p "${{ github.workspace }}/out" "${{ github.workspace }}/build" "${{ github.workspace }}/toolchains" "${{ github.workspace }}/modules_out"
 
-      - name: Cache Toolchains
-        id: cache-toolchains
-        uses: actions/cache@v4
-        with:
-          path: ${{ github.workspace }}/toolchains
-          key: ${{ runner.os }}-toolchains-v3
-
-      - name: Cache ccache
-        uses: actions/cache@v4
-        with:
-          path: ~/.ccache
-          key: ${{ runner.os }}-ccache-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-ccache-
-
       - name: Setup System Dependencies
         run: |
           echo "[INFO]: Installing system requirements..."
@@ -87,18 +68,17 @@ jobs:
           sudo apt-get install -y --fix-missing \
             git device-tree-compiler lz4 xz-utils zlib1g-dev zip make gcc g++ \
             python3 python-is-python3 libncurses-dev flex bison gperf libssl-dev \
-            libelf-dev kmod pahole zstd libyaml-dev ccache
+            libelf-dev kmod pahole zstd libyaml-dev
 
       - name: Download and Set up Toolchains
-        if: steps.cache-toolchains.outputs.cache-hit != 'true'
         run: |
           echo "[INFO] Setting up Toolchains..."
           cd "${{ github.workspace }}/toolchains"
           
           echo "--> Downloading Clang..."
-          mkdir -p clang-r383902b
-          wget -q https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/0e9e7035bf8ad42437c6156e5950eab13655b26c/clang-r383902b.tar.gz -O clang.tar.gz
-          tar -xf clang.tar.gz -C clang-r383902b && rm clang.tar.gz
+          mkdir -p clang-r383902b1
+          wget -q https://android.googlesource.com/platform//prebuilts/clang/host/linux-x86/+archive/4c6fbc28d3b078a5308894fc175f962bb26a5718/clang-r383902b1.tar.gz -O clang.tar.gz
+          tar -xf clang.tar.gz -C clang-r383902b1 && rm clang.tar.gz
           
           echo "--> Downloading GCC 14.3..."
           mkdir -p gcc-14.3
@@ -109,14 +89,10 @@ jobs:
           chmod +x ${{ env.CLANG_BASE }}/bin/*
           chmod +x ${{ env.GCC_64_BASE }}/bin/*
 
-      - name: Set up PATH and ccache
+      - name: Set up PATH
         run: |
           echo "${{ env.CLANG_BASE }}/bin" >> $GITHUB_PATH
           echo "${{ env.GCC_64_BASE }}/bin" >> $GITHUB_PATH
-          
-          echo "[INFO] Configuring ccache..."
-          ccache -M 5G
-          ccache -z
 
       - name: Build Kernel, Modules, and DTBs
         run: |
@@ -140,10 +116,9 @@ jobs:
             CROSS_COMPILE="${{ env.CROSS_COMPILE }}" \
             CROSS_COMPILE_ARM32="${{ env.CROSS_COMPILE_ARM32 }}" \
             CLANG_TRIPLE="aarch64-none-linux-gnu-" \
-            Image modules dtbs || exit 1 # <--- MODIFIED: Added dtbs and dtbos targets
+            Image modules dtbs || exit 1
 
           echo -e "\n[INFO]: KERNEL BUILD FINISHED..!"
-          ccache -s
 
       - name: Install In-Tree Kernel Modules
         run: |
@@ -280,7 +255,6 @@ jobs:
           touch "${{ github.workspace }}/modules_out/lib/modules/$KERNEL_VERSION/modules.builtin.modinfo"
           depmod -a -b "${{ github.workspace }}/modules_out" "$KERNEL_VERSION"
 
-      # <--- ADDED SECTION: Package the DTB and DTBO files --->
       - name: Package DTB and DTBO files
         run: |
           echo "[INFO]: Packaging DTB and DTBO files..."
